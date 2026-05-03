@@ -15,6 +15,9 @@ for (let plug of await readdir("./plugins")) {
     await writeFile(`./dist/${plug}/index.html`, owo(pluginTemplate, plug, manifest));
 }
 
-await writeFile('dist/404.html', indexTemplate.replaceAll(/<(for-each-plugin)>([\s\S]*?)<\/\1>/g, (_, __, template) => {
+const pluginIndex = indexTemplate.replaceAll(/<(for-each-plugin)>([\s\S]*?)<\/\1>/g, (_, __, template) => {
     return plugs.map(p => owo(template, p.id, p.manifest)).join('');
-}));
+});
+
+await writeFile('dist/index.html', pluginIndex);
+await writeFile('dist/404.html', pluginIndex);
