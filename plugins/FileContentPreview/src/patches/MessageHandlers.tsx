@@ -93,7 +93,14 @@ function handleButtonActionComponent(args, originalFunction) {
   const customId =
     typeof nativeEvent === 'string'
       ? nativeEvent
-      : nativeEvent?.id ?? nativeEvent?.custom_id ?? nativeEvent?.customId ?? nativeEvent?.component?.id ?? nativeEvent?.component?.custom_id ?? nativeEvent?.component?.customId;
+      : nativeEvent?.id ??
+        nativeEvent?.componentId ??
+        nativeEvent?.custom_id ??
+        nativeEvent?.customId ??
+        nativeEvent?.component?.id ??
+        nativeEvent?.component?.componentId ??
+        nativeEvent?.component?.custom_id ??
+        nativeEvent?.component?.customId;
 
   if (!isFileActionCustomId(customId)) {
     return originalFunction(...args);

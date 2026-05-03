@@ -77,7 +77,7 @@ test('resolves adjacent Preview and Download component buttons from the generate
 
   assert.deepEqual(
     resolveFileActionFromEvent({
-      nativeEvent: previewButton.id,
+      nativeEvent: { messageId: 'message-1', componentId: previewButton.id },
       message,
       isPreviewableAttachment,
     }),
@@ -86,7 +86,7 @@ test('resolves adjacent Preview and Download component buttons from the generate
 
   assert.deepEqual(
     resolveFileActionFromEvent({
-      nativeEvent: downloadButton.id,
+      nativeEvent: { messageId: 'message-1', componentId: downloadButton.id },
       message,
       isPreviewableAttachment,
     }),

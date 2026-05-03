@@ -97,9 +97,11 @@ function getNativeEventCustomId(nativeEvent: any): string | null {
 
   const customId =
     nativeEvent?.id ??
+    nativeEvent?.componentId ??
     nativeEvent?.custom_id ??
     nativeEvent?.customId ??
     nativeEvent?.component?.id ??
+    nativeEvent?.component?.componentId ??
     nativeEvent?.component?.custom_id ??
     nativeEvent?.component?.customId ??
     nativeEvent?.component?.custom_id;
