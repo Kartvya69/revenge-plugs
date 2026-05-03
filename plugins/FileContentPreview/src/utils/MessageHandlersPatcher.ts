@@ -4,12 +4,12 @@
  */
 
 import { findByProps } from '@vendetta/metro';
-import { before } from '@vendetta/patcher';
+import { before, instead } from '@vendetta/patcher';
 
 const { MessagesHandlers } = findByProps('MessagesHandlers');
 let origGetParams: any;
 let patches: Map<symbol, () => void> = new Map();
-let pendingPatches: Map<symbol, [string, (args: any[]) => any]> = new Map();
+let pendingPatches: Map<symbol, [string, (args: any[]) => any, 'before' | 'instead']> = new Map();
 let _handlers: any;
 const isPatchedSymbol = Symbol('isPatchedSymbol');
 
@@ -112,7 +112,7 @@ function patchHandlers(handlers: any) {
   handlers[isPatchedSymbol] = true;
   _handlers = handlers;
   for (let [a, val] of pendingPatches) {
-    patches.set(a, before(val[0], _handlers, val[1]));
+    patches.set(a, val[2] === 'instead' ? instead(val[0], _handlers, val[1]) : before(val[0], _handlers, val[1]));
     pendingPatches.delete(a);
   }
 }
@@ -155,7 +155,18 @@ export function patch(fn: KnownHandlers, callback: (args: any[]) => any) {
   if (_handlers) {
     patches.set(a, before(fn, _handlers, callback));
   } else {
-    pendingPatches.set(a, [fn, callback]);
+    pendingPatches.set(a, [fn, callback, 'before']);
+  }
+  return () => unpatch(a);
+}
+
+export function patchInstead(fn: KnownHandlers, callback: (args: any[], originalFunction: Function) => any) {
+  if (!origGetParams) start();
+  let a = Symbol('patch');
+  if (_handlers) {
+    patches.set(a, instead(fn, _handlers, callback));
+  } else {
+    pendingPatches.set(a, [fn, callback, 'instead']);
   }
   return () => unpatch(a);
 }
@@ -171,7 +182,7 @@ export function unpatch(patch: symbol) {
   } else {
     console.error(`MessageHandlersPatcher.unpatch should be used like: unpatch(patch) or unpatch(UnpatchALL). ${String(patch)} was given instead.`);
   }
-  if (!patches.size) end();
+  if (!patches.size && !pendingPatches.size) end();
 }
 
-export default { patch, unpatch, UnpatchALL };
+export default { patch, patchInstead, unpatch, UnpatchALL };

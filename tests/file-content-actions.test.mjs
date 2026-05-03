@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  FILE_ACTIONS_PER_ATTACHMENT,
   FILE_CONTENT_ACTION_KEY,
+  createFileActionButtons,
   createFileActionData,
   resolveFileActionFromEvent,
 } from '../plugins/FileContentPreview/src/utils/fileActions.ts';
@@ -42,14 +42,13 @@ test('resolves preview actions from tagged coded links when original attachments
   );
 });
 
-test('maps generated preview and download rows back to original attachments', () => {
+test('maps generated preview rows back to original attachments', () => {
   const message = {
     codedLinks: [{ type: 'real-invite' }],
     attachments: [imageAttachment, textAttachment],
   };
   const firstFileActionIndex = message.codedLinks.length;
 
-  assert.equal(FILE_ACTIONS_PER_ATTACHMENT, 2);
   assert.deepEqual(
     resolveFileActionFromEvent({
       nativeEvent: { index: firstFileActionIndex },
@@ -58,10 +57,29 @@ test('maps generated preview and download rows back to original attachments', ()
     }),
     createFileActionData(textAttachment, 'preview'),
   );
+});
+
+test('resolves adjacent Preview and Download component buttons from the generated action row', () => {
+  const [row] = createFileActionButtons(textAttachment, 0);
+  const [previewButton, downloadButton] = row.components;
+  const message = {
+    codedLinks: [],
+    attachments: [],
+    components: [row],
+  };
 
   assert.deepEqual(
     resolveFileActionFromEvent({
-      nativeEvent: { index: firstFileActionIndex + 1 },
+      nativeEvent: { custom_id: previewButton.custom_id },
+      message,
+      isPreviewableAttachment,
+    }),
+    createFileActionData(textAttachment, 'preview'),
+  );
+
+  assert.deepEqual(
+    resolveFileActionFromEvent({
+      nativeEvent: { customId: downloadButton.customId },
       message,
       isPreviewableAttachment,
     }),
@@ -86,7 +104,7 @@ test('ignores real coded links and out-of-range generated action indexes', () =>
 
   assert.equal(
     resolveFileActionFromEvent({
-      nativeEvent: { index: message.codedLinks.length + FILE_ACTIONS_PER_ATTACHMENT },
+      nativeEvent: { index: message.codedLinks.length + 1 },
       message,
       isPreviewableAttachment,
     }),

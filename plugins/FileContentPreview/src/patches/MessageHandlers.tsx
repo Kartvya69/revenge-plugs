@@ -3,7 +3,7 @@ import filetypes from '../filetypes';
 import MessageHandlers from '../utils/MessageHandlersPatcher';
 import { FCModal } from '../ui/FCModal';
 import { downloadFile } from '../utils/downloadFile';
-import { resolveFileActionFromEvent } from '../utils/fileActions';
+import { isFileActionCustomId, resolveFileActionFromEvent } from '../utils/fileActions';
 import getMessages from '../translations';
 
 const SelectedChannelStore = findByStoreName('SelectedChannelStore');
@@ -15,7 +15,21 @@ function isPreviewableAttachment(attachment) {
   return filetypes.has(attachment.filename?.toLowerCase().split('.').pop());
 }
 
-function getMessage(nativeEvent) {
+function normalizeMessage(message) {
+  if (!message) return null;
+
+  /** Forwards */
+  if (message?.messageSnapshots?.[0]?.message) {
+    return message.messageSnapshots[0].message;
+  }
+
+  return message;
+}
+
+function getMessage(nativeEvent, eventData = null) {
+  const eventMessage = normalizeMessage(eventData?.message ?? nativeEvent?.message);
+  if (eventMessage) return eventMessage;
+
   if (!nativeEvent?.messageId) return null;
 
   const { messageId } = nativeEvent;
@@ -28,12 +42,8 @@ function getMessage(nativeEvent) {
   if (message.messageReference && message.messageReference.type == 0 && message.messageReference.channel_id != channel) {
     message = MessageStore.getMessage(message.messageReference.channel_id, message.messageReference.message_id);
   }
-  /** Forwards */
-  if (message?.messageSnapshots?.[0]?.message) {
-    message = message.messageSnapshots[0].message;
-  }
 
-  return message;
+  return normalizeMessage(message);
 }
 
 function openPreview({ filename, url, size }) {
@@ -50,12 +60,12 @@ function openPreview({ filename, url, size }) {
   });
 }
 
-function handleFileAction(args) {
-  const nativeEvent = args?.[0]?.nativeEvent;
-  const message = getMessage(nativeEvent);
-  const action = resolveFileActionFromEvent({ nativeEvent, message, isPreviewableAttachment });
+function getNativeEvent(args) {
+  return args?.[0]?.nativeEvent ?? args?.[0];
+}
 
-  if (!action) return;
+function runFileAction(action) {
+  if (!action) return false;
 
   if (action.action === 'download') {
     const translations = getMessages(intl.currentLocale);
@@ -63,18 +73,47 @@ function handleFileAction(args) {
       saveText: translations.FILE_SAVED,
       failText: translations.FILE_SAVE_ERROR,
     });
-    return;
+    return true;
   }
 
   openPreview(action);
+  return true;
+}
+
+function handleFileAction(args) {
+  const nativeEvent = getNativeEvent(args);
+  const message = getMessage(nativeEvent, args?.[0]);
+  const action = resolveFileActionFromEvent({ nativeEvent, message, isPreviewableAttachment });
+
+  runFileAction(action);
+}
+
+function handleButtonActionComponent(args, originalFunction) {
+  const nativeEvent = getNativeEvent(args);
+  const customId = nativeEvent?.custom_id ?? nativeEvent?.customId ?? nativeEvent?.component?.custom_id ?? nativeEvent?.component?.customId;
+
+  if (!isFileActionCustomId(customId)) {
+    return originalFunction(...args);
+  }
+
+  const message = getMessage(nativeEvent, args?.[0]);
+  const action = resolveFileActionFromEvent({ nativeEvent, message, isPreviewableAttachment });
+
+  if (!runFileAction(action)) {
+    return originalFunction(...args);
+  }
+
+  return null;
 }
 
 export default function patch() {
   const unpatchTap = MessageHandlers.patch('handleTapInviteEmbed', handleFileAction);
   const unpatchAccept = MessageHandlers.patch('handleTapInviteEmbedAccept', handleFileAction);
+  const unpatchButton = MessageHandlers.patchInstead('handleTapButtonActionComponent', handleButtonActionComponent);
 
   return () => {
     unpatchTap();
     unpatchAccept();
+    unpatchButton();
   };
 }

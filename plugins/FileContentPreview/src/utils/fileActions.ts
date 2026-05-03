@@ -1,5 +1,5 @@
 export const FILE_CONTENT_ACTION_KEY = '__fileContentPreviewAction';
-export const FILE_ACTIONS_PER_ATTACHMENT = 2;
+export const FILE_COMPONENT_CUSTOM_ID_PREFIX = 'file-content-preview';
 
 export type FileActionType = 'preview' | 'download';
 
@@ -11,6 +11,21 @@ export interface FileAttachment {
 
 export interface FileActionData extends FileAttachment {
   action: FileActionType;
+}
+
+interface FileComponentButton {
+  type: 2;
+  style: number;
+  label: string;
+  custom_id: string;
+  customId: string;
+  disabled: boolean;
+  [FILE_CONTENT_ACTION_KEY]: FileActionData;
+}
+
+interface FileComponentRow {
+  type: 1;
+  components: FileComponentButton[];
 }
 
 export function createFileActionData(attachment: FileAttachment, action: FileActionType): FileActionData {
@@ -34,15 +49,81 @@ export function withFileActionData<T extends object>(value: T, data: FileActionD
   return Object.assign(value, { [FILE_CONTENT_ACTION_KEY]: data });
 }
 
+export function createFileActionCustomId(action: FileActionType, attachmentIndex: number): string {
+  return `${FILE_COMPONENT_CUSTOM_ID_PREFIX}:${action}:${attachmentIndex}`;
+}
+
+function createFileButton(attachment: FileAttachment, action: FileActionType, attachmentIndex: number): FileComponentButton {
+  const customId = createFileActionCustomId(action, attachmentIndex);
+  const data = createFileActionData(attachment, action);
+
+  return withFileActionData({
+    type: 2,
+    style: action === 'preview' ? 1 : 2,
+    label: action === 'preview' ? 'Preview' : 'Download',
+    custom_id: customId,
+    customId,
+    disabled: false,
+  }, data);
+}
+
+export function createFileActionButtons(attachment: FileAttachment, attachmentIndex: number): FileComponentRow[] {
+  return [
+    {
+      type: 1,
+      components: [
+        createFileButton(attachment, 'preview', attachmentIndex),
+        createFileButton(attachment, 'download', attachmentIndex),
+      ],
+    },
+  ];
+}
+
+function getNativeEventCustomId(nativeEvent: any): string | null {
+  const customId =
+    nativeEvent?.custom_id ??
+    nativeEvent?.customId ??
+    nativeEvent?.component?.custom_id ??
+    nativeEvent?.component?.customId ??
+    nativeEvent?.component?.custom_id;
+
+  return typeof customId === 'string' ? customId : null;
+}
+
+function getFileActionFromComponents(components: any[] | undefined, customId: string | null): FileActionData | null {
+  if (!customId) return null;
+
+  for (const row of components ?? []) {
+    for (const component of row?.components ?? []) {
+      const componentCustomId = component?.custom_id ?? component?.customId;
+      if (componentCustomId === customId) {
+        return getFileActionData(component);
+      }
+    }
+  }
+
+  return null;
+}
+
+export function isFileActionCustomId(customId: unknown): customId is string {
+  return typeof customId === 'string' && customId.startsWith(`${FILE_COMPONENT_CUSTOM_ID_PREFIX}:`);
+}
+
 export function resolveFileActionFromEvent({
   nativeEvent,
   message,
   isPreviewableAttachment,
 }: {
   nativeEvent: { index?: number } | null | undefined;
-  message: { codedLinks?: any[]; attachments?: FileAttachment[] } | null | undefined;
+  message: { codedLinks?: any[]; attachments?: FileAttachment[]; components?: any[] } | null | undefined;
   isPreviewableAttachment: (attachment: FileAttachment) => boolean;
 }): FileActionData | null {
+  const eventAction = getFileActionData(nativeEvent) ?? getFileActionData((nativeEvent as any)?.component);
+  if (eventAction) return eventAction;
+
+  const componentAction = getFileActionFromComponents(message?.components, getNativeEventCustomId(nativeEvent));
+  if (componentAction) return componentAction;
+
   const index = nativeEvent?.index;
   if (typeof index !== 'number' || index < 0 || !message) return null;
 
@@ -54,9 +135,7 @@ export function resolveFileActionFromEvent({
 
   const textFiles = (message.attachments ?? []).filter(isPreviewableAttachment);
   const actionOffset = index - codedLinks.length;
-  const attachmentIndex = Math.floor(actionOffset / FILE_ACTIONS_PER_ATTACHMENT);
-  const action = actionOffset % FILE_ACTIONS_PER_ATTACHMENT === 0 ? 'preview' : 'download';
-  const attachment = textFiles[attachmentIndex];
+  const attachment = textFiles[actionOffset];
 
-  return attachment ? createFileActionData(attachment, action) : null;
+  return attachment ? createFileActionData(attachment, 'preview') : null;
 }
