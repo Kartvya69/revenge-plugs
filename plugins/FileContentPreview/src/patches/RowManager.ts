@@ -4,9 +4,7 @@
 import { findByStoreName, findByName, findByProps } from '@vendetta/metro';
 import { after } from '@vendetta/patcher';
 import filetypes from '../filetypes';
-import { GENERATED_FILE_ACTIONS, createFileActionData, withFileActionData } from '../utils/fileActions';
-import { debugLog } from '../utils/debugLogger';
-import { showDiagnosticToastOnce } from '../utils/runtimeDiagnostics';
+import { createFileActionData, withFileActionData } from '../utils/fileActions';
 
 const ThemeStore = findByStoreName('ThemeStore');
 
@@ -33,11 +31,7 @@ function isPreviewableAttachment(attachment) {
   return filetypes.has(attachment.filename?.toLowerCase().split('.').pop());
 }
 
-function getActionLabel(action) {
-  return action === 'download' ? 'Download' : 'Preview';
-}
-
-function makeRPL(attachment, action) {
+function makeRPL(attachment) {
   const filename = attachment.filename ?? 'unknown';
   const size = attachment.size ?? 0;
 
@@ -50,11 +44,11 @@ function makeRPL(attachment, action) {
     type: null,
     extendedType: CodedLinkExtendedType.EMBEDDED_ACTIVITY_INVITE,
     participantAvatarUris: [],
-    acceptLabelText: getActionLabel(action),
+    acceptLabelText: 'Preview',
     splashUrl: null,
     noParticipantsText: '\n' + filename,
     ctaEnabled: true,
-  }, createFileActionData({ filename, url: attachment.url, size }, action));
+  }, createFileActionData({ filename, url: attachment.url, size }, 'preview'));
 }
 
 export default function patch() {
@@ -64,15 +58,9 @@ export default function patch() {
     if (!message.attachments?.length) return;
     let rpls: any[] = [];
     let attachs: any[] = [];
-    const messageId = message.id ?? message.messageId ?? 'unknown';
-    debugLog('row.generate.start', {
-      messageId,
-      attachments: message.attachments.length,
-      codedLinks: message.codedLinks?.length ?? 0,
-    });
     message.attachments.forEach((attachment) => {
       if (isPreviewableAttachment(attachment)) {
-        rpls.push(...GENERATED_FILE_ACTIONS.map((action) => makeRPL(attachment, action)));
+        rpls.push(makeRPL(attachment));
       } else {
         attachs.push(attachment);
       }
@@ -81,13 +69,6 @@ export default function patch() {
       if (!message.codedLinks?.length) message.codedLinks = [];
       message.codedLinks.push(...rpls);
       message.attachments = attachs;
-      showDiagnosticToastOnce('row.generate.injected', 'FCP file actions injected');
-      debugLog('row.generate.injected', {
-        messageId,
-        actionRows: rpls.length,
-        remainingAttachments: attachs.length,
-        actions: GENERATED_FILE_ACTIONS,
-      });
     }
   });
 }

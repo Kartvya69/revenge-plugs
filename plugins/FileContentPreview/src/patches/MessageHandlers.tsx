@@ -2,16 +2,11 @@ import { findByStoreName, findByProps } from '@vendetta/metro';
 import filetypes from '../filetypes';
 import MessageHandlers from '../utils/MessageHandlersPatcher';
 import { FCModal } from '../ui/FCModal';
-import { downloadFile } from '../utils/downloadFile';
-import { isFileActionCustomId, resolveFileActionFromEvent } from '../utils/fileActions';
-import getMessages from '../translations';
-import { debugLog, debugWarn, describeFileActionForLog } from '../utils/debugLogger';
-import { showDiagnosticToast } from '../utils/runtimeDiagnostics';
+import { resolveFileActionFromEvent } from '../utils/fileActions';
 
 const SelectedChannelStore = findByStoreName('SelectedChannelStore');
 const MessageStore = findByStoreName('MessageStore');
 const modals = findByProps('pushModal');
-const intl = findByProps('intl').intl;
 
 function isPreviewableAttachment(attachment) {
   return filetypes.has(attachment.filename?.toLowerCase().split('.').pop());
@@ -49,7 +44,6 @@ function getMessage(nativeEvent, eventData = null) {
 }
 
 function openPreview({ filename, url, size }) {
-  debugLog('preview.open', { filename, size, hasUrl: Boolean(url) });
   modals.pushModal({
     key: 'file-content-preview',
     modal: {
@@ -68,24 +62,7 @@ function getNativeEvent(args) {
 }
 
 function runFileAction(action) {
-  if (!action) {
-    debugWarn('action.missing');
-    showDiagnosticToast('FCP tap: no file action');
-    return false;
-  }
-
-  debugLog('action.run', describeFileActionForLog(action));
-  showDiagnosticToast(`FCP tap: ${action.action === 'download' ? 'Download' : 'Preview'}`);
-
-  if (action.action === 'download') {
-    const translations = getMessages(intl.currentLocale);
-    downloadFile(action.url, {
-      saveText: translations.FILE_SAVED,
-      failText: translations.FILE_SAVE_ERROR,
-    });
-    return true;
-  }
-
+  if (!action) return false;
   openPreview(action);
   return true;
 }
@@ -93,15 +70,7 @@ function runFileAction(action) {
 function resolveInviteFileAction(args) {
   const nativeEvent = getNativeEvent(args);
   const message = getMessage(nativeEvent, args?.[0]);
-  const action = resolveFileActionFromEvent({ nativeEvent, message, isPreviewableAttachment });
-
-  debugLog('invite.tap', {
-    nativeEvent,
-    hasMessage: Boolean(message),
-    action: describeFileActionForLog(action),
-  });
-
-  return action;
+  return resolveFileActionFromEvent({ nativeEvent, message, isPreviewableAttachment });
 }
 
 function handleInviteFileAction(args, originalFunction) {
@@ -115,50 +84,12 @@ function handleInviteFileAction(args, originalFunction) {
   return null;
 }
 
-function handleButtonActionComponent(args, originalFunction) {
-  const nativeEvent = getNativeEvent(args);
-  const customId =
-    typeof nativeEvent === 'string'
-      ? nativeEvent
-      : nativeEvent?.id ??
-        nativeEvent?.componentId ??
-        nativeEvent?.custom_id ??
-        nativeEvent?.customId ??
-        nativeEvent?.component?.id ??
-        nativeEvent?.component?.componentId ??
-        nativeEvent?.component?.custom_id ??
-        nativeEvent?.component?.customId;
-
-  if (!isFileActionCustomId(customId)) {
-    debugLog('button.tap.passthrough', { customId, nativeEvent });
-    return originalFunction(...args);
-  }
-
-  const message = getMessage(nativeEvent, args?.[0]);
-  const action = resolveFileActionFromEvent({ nativeEvent, message, isPreviewableAttachment });
-
-  debugLog('button.tap.fileAction', {
-    customId,
-    nativeEvent,
-    hasMessage: Boolean(message),
-    action: describeFileActionForLog(action),
-  });
-
-  if (!runFileAction(action)) {
-    return originalFunction(...args);
-  }
-
-  return null;
-}
-
 export default function patch() {
   const unpatchTap = MessageHandlers.patchInstead('handleTapInviteEmbed', handleInviteFileAction);
   const unpatchAccept = MessageHandlers.patchInstead('handleTapInviteEmbedAccept', handleInviteFileAction);
-  const unpatchButton = MessageHandlers.patchInstead('handleTapButtonActionComponent', handleButtonActionComponent);
 
   return () => {
     unpatchTap();
     unpatchAccept();
-    unpatchButton();
   };
 }
