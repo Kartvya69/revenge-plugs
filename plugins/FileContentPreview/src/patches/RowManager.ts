@@ -4,6 +4,8 @@
 import { findByStoreName, findByName, findByProps } from '@vendetta/metro';
 import { after } from '@vendetta/patcher';
 import filetypes from '../filetypes';
+import { createFileActionData, withFileActionData } from '../utils/fileActions';
+import type { FileActionType } from '../utils/fileActions';
 
 const ThemeStore = findByStoreName('ThemeStore');
 
@@ -26,8 +28,20 @@ function getCodedLinkColors() {
   };
 }
 
-function makeRPL(filename = 'unknown', size = '? bytes') {
-  return {
+const actionLabels = {
+  preview: 'Preview',
+  download: 'Download',
+};
+
+function isPreviewableAttachment(attachment) {
+  return filetypes.has(attachment.filename?.toLowerCase().split('.').pop());
+}
+
+function makeRPL(attachment, action: FileActionType) {
+  const filename = attachment.filename ?? 'unknown';
+  const size = attachment.size ?? 0;
+
+  return withFileActionData({
     ...getCodedLinkColors(),
     thumbnailCornerRadius: 15,
     headerText: '',
@@ -36,11 +50,11 @@ function makeRPL(filename = 'unknown', size = '? bytes') {
     type: null,
     extendedType: CodedLinkExtendedType.EMBEDDED_ACTIVITY_INVITE,
     participantAvatarUris: [],
-    acceptLabelText: 'Preview',
+    acceptLabelText: actionLabels[action],
     splashUrl: null,
     noParticipantsText: '\n' + filename,
     ctaEnabled: true,
-  };
+  }, createFileActionData({ filename, url: attachment.url, size }, action));
 }
 
 export default function patch() {
@@ -51,8 +65,8 @@ export default function patch() {
     let rpls: any[] = [];
     let attachs: any[] = [];
     message.attachments.forEach((attachment) => {
-      if (filetypes.has(attachment.filename.toLowerCase().split('.').pop())) {
-        rpls.push(makeRPL(attachment.filename, attachment.size));
+      if (isPreviewableAttachment(attachment)) {
+        rpls.push(makeRPL(attachment, 'preview'), makeRPL(attachment, 'download'));
       } else {
         attachs.push(attachment);
       }

@@ -1,8 +1,9 @@
-import { React, ReactNative, clipboard } from '@vendetta/metro/common';
+import { React } from '@vendetta/metro/common';
 import { findByName } from '@vendetta/metro';
 import { Forms, General } from '@vendetta/ui/components';
 import { getAssetIDByName } from '@vendetta/ui/assets';
 import { showToast } from '@vendetta/ui/toasts';
+import { copyFileUrl, downloadFile } from '../utils/downloadFile';
 
 const { View, TouchableOpacity } = General;
 const { FormIcon } = Forms;
@@ -83,21 +84,12 @@ export const FCButtonBar: any = ({ children }) => {
   );
 };
 
-const download = ReactNative.NativeModules.MediaManager.downloadMediaAsset;
-
 export const DownloadButton: any = ({ url, saveText, failText, copyText }) => {
   function onPress() {
-    download(url, 0).then((saved) => {
-      if (saved) {
-        showToast(saveText, getAssetIDByName('ic_selection_checked_24px'));
-      } else {
-        showToast(failText, getAssetIDByName('ic_close_circle'));
-      }
-    });
+    downloadFile(url, { saveText, failText });
   }
   function onLongPress() {
-    clipboard.setString(url);
-    showToast(copyText, getAssetIDByName('toast_copy_link'));
+    copyFileUrl(url, copyText);
   }
 
   return (
