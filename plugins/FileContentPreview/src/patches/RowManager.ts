@@ -60,10 +60,11 @@ export default function patch() {
     let componentRows: any[] = [];
     let attachs: any[] = [];
     let textFileIndex = 0;
+    const messageId = message.id ?? message.messageId ?? 'unknown';
     message.attachments.forEach((attachment) => {
       if (isPreviewableAttachment(attachment)) {
         rpls.push(makeRPL(attachment));
-        componentRows.push(...createFileActionButtons(attachment, textFileIndex++));
+        componentRows.push(...createFileActionButtons(attachment, `${messageId}:${textFileIndex++}`));
       } else {
         attachs.push(attachment);
       }

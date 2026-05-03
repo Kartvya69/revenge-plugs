@@ -68,9 +68,16 @@ test('resolves adjacent Preview and Download component buttons from the generate
     components: [row],
   };
 
+  assert.equal(typeof row.id, 'string');
+  assert.notEqual(row.id, '');
+  assert.equal(previewButton.state, 0);
+  assert.equal(downloadButton.state, 0);
+  assert.equal(previewButton.id, previewButton.customId);
+  assert.equal(downloadButton.id, downloadButton.customId);
+
   assert.deepEqual(
     resolveFileActionFromEvent({
-      nativeEvent: { custom_id: previewButton.custom_id },
+      nativeEvent: previewButton.id,
       message,
       isPreviewableAttachment,
     }),
@@ -79,7 +86,7 @@ test('resolves adjacent Preview and Download component buttons from the generate
 
   assert.deepEqual(
     resolveFileActionFromEvent({
-      nativeEvent: { customId: downloadButton.customId },
+      nativeEvent: downloadButton.id,
       message,
       isPreviewableAttachment,
     }),

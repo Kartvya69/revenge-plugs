@@ -15,6 +15,8 @@ export interface FileActionData extends FileAttachment {
 
 interface FileComponentButton {
   type: 2;
+  id: string;
+  state: 0;
   style: number;
   label: string;
   custom_id: string;
@@ -25,8 +27,11 @@ interface FileComponentButton {
 
 interface FileComponentRow {
   type: 1;
+  id: string;
   components: FileComponentButton[];
 }
+
+const fileActionsById = new Map<string, FileActionData>();
 
 export function createFileActionData(attachment: FileAttachment, action: FileActionType): FileActionData {
   return {
@@ -49,16 +54,23 @@ export function withFileActionData<T extends object>(value: T, data: FileActionD
   return Object.assign(value, { [FILE_CONTENT_ACTION_KEY]: data });
 }
 
-export function createFileActionCustomId(action: FileActionType, attachmentIndex: number): string {
+export function createFileActionCustomId(action: FileActionType, attachmentIndex: number | string): string {
   return `${FILE_COMPONENT_CUSTOM_ID_PREFIX}:${action}:${attachmentIndex}`;
 }
 
-function createFileButton(attachment: FileAttachment, action: FileActionType, attachmentIndex: number): FileComponentButton {
+function createFileActionRowId(attachmentIndex: number | string): string {
+  return `${FILE_COMPONENT_CUSTOM_ID_PREFIX}:row:${attachmentIndex}`;
+}
+
+function createFileButton(attachment: FileAttachment, action: FileActionType, attachmentIndex: number | string): FileComponentButton {
   const customId = createFileActionCustomId(action, attachmentIndex);
   const data = createFileActionData(attachment, action);
+  fileActionsById.set(customId, data);
 
   return withFileActionData({
     type: 2,
+    id: customId,
+    state: 0,
     style: action === 'preview' ? 1 : 2,
     label: action === 'preview' ? 'Preview' : 'Download',
     custom_id: customId,
@@ -67,10 +79,11 @@ function createFileButton(attachment: FileAttachment, action: FileActionType, at
   }, data);
 }
 
-export function createFileActionButtons(attachment: FileAttachment, attachmentIndex: number): FileComponentRow[] {
+export function createFileActionButtons(attachment: FileAttachment, attachmentIndex: number | string): FileComponentRow[] {
   return [
     {
       type: 1,
+      id: createFileActionRowId(attachmentIndex),
       components: [
         createFileButton(attachment, 'preview', attachmentIndex),
         createFileButton(attachment, 'download', attachmentIndex),
@@ -80,9 +93,13 @@ export function createFileActionButtons(attachment: FileAttachment, attachmentIn
 }
 
 function getNativeEventCustomId(nativeEvent: any): string | null {
+  if (typeof nativeEvent === 'string') return nativeEvent;
+
   const customId =
+    nativeEvent?.id ??
     nativeEvent?.custom_id ??
     nativeEvent?.customId ??
+    nativeEvent?.component?.id ??
     nativeEvent?.component?.custom_id ??
     nativeEvent?.component?.customId ??
     nativeEvent?.component?.custom_id;
@@ -95,7 +112,7 @@ function getFileActionFromComponents(components: any[] | undefined, customId: st
 
   for (const row of components ?? []) {
     for (const component of row?.components ?? []) {
-      const componentCustomId = component?.custom_id ?? component?.customId;
+      const componentCustomId = component?.id ?? component?.custom_id ?? component?.customId;
       if (componentCustomId === customId) {
         return getFileActionData(component);
       }
@@ -118,10 +135,14 @@ export function resolveFileActionFromEvent({
   message: { codedLinks?: any[]; attachments?: FileAttachment[]; components?: any[] } | null | undefined;
   isPreviewableAttachment: (attachment: FileAttachment) => boolean;
 }): FileActionData | null {
+  const customId = getNativeEventCustomId(nativeEvent);
   const eventAction = getFileActionData(nativeEvent) ?? getFileActionData((nativeEvent as any)?.component);
   if (eventAction) return eventAction;
 
-  const componentAction = getFileActionFromComponents(message?.components, getNativeEventCustomId(nativeEvent));
+  const registeredAction = customId ? fileActionsById.get(customId) : null;
+  if (registeredAction) return registeredAction;
+
+  const componentAction = getFileActionFromComponents(message?.components, customId);
   if (componentAction) return componentAction;
 
   const index = nativeEvent?.index;
