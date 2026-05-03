@@ -59,6 +59,32 @@ test('maps generated preview rows back to original attachments', () => {
   );
 });
 
+test('maps generated preview and download coded-link rows back to original attachments', () => {
+  const message = {
+    codedLinks: [{ type: 'real-invite' }],
+    attachments: [imageAttachment, textAttachment],
+  };
+  const firstFileActionIndex = message.codedLinks.length;
+
+  assert.deepEqual(
+    resolveFileActionFromEvent({
+      nativeEvent: { index: firstFileActionIndex },
+      message,
+      isPreviewableAttachment,
+    }),
+    createFileActionData(textAttachment, 'preview'),
+  );
+
+  assert.deepEqual(
+    resolveFileActionFromEvent({
+      nativeEvent: { index: firstFileActionIndex + 1 },
+      message,
+      isPreviewableAttachment,
+    }),
+    createFileActionData(textAttachment, 'download'),
+  );
+});
+
 test('resolves adjacent Preview and Download component buttons from the generated action row', () => {
   const [row] = createFileActionButtons(textAttachment, 0);
   const [previewButton, downloadButton] = row.components;
@@ -111,7 +137,7 @@ test('ignores real coded links and out-of-range generated action indexes', () =>
 
   assert.equal(
     resolveFileActionFromEvent({
-      nativeEvent: { index: message.codedLinks.length + 1 },
+      nativeEvent: { index: message.codedLinks.length + 2 },
       message,
       isPreviewableAttachment,
     }),

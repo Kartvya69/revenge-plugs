@@ -2,6 +2,7 @@ export const FILE_CONTENT_ACTION_KEY = '__fileContentPreviewAction';
 export const FILE_COMPONENT_CUSTOM_ID_PREFIX = 'file-content-preview';
 
 export type FileActionType = 'preview' | 'download';
+export const GENERATED_FILE_ACTIONS: FileActionType[] = ['preview', 'download'];
 
 export interface FileAttachment {
   filename: string;
@@ -156,9 +157,11 @@ export function resolveFileActionFromEvent({
 
   if (index < codedLinks.length) return null;
 
-  const textFiles = (message.attachments ?? []).filter(isPreviewableAttachment);
   const actionOffset = index - codedLinks.length;
-  const attachment = textFiles[actionOffset];
+  const action = GENERATED_FILE_ACTIONS[actionOffset % GENERATED_FILE_ACTIONS.length];
+  const attachmentIndex = Math.floor(actionOffset / GENERATED_FILE_ACTIONS.length);
+  const textFiles = (message.attachments ?? []).filter(isPreviewableAttachment);
+  const attachment = textFiles[attachmentIndex];
 
-  return attachment ? createFileActionData(attachment, 'preview') : null;
+  return attachment && action ? createFileActionData(attachment, action) : null;
 }

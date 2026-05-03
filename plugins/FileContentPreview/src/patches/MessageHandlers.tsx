@@ -6,6 +6,7 @@ import { downloadFile } from '../utils/downloadFile';
 import { isFileActionCustomId, resolveFileActionFromEvent } from '../utils/fileActions';
 import getMessages from '../translations';
 import { debugLog, debugWarn, describeFileActionForLog } from '../utils/debugLogger';
+import { showDiagnosticToast } from '../utils/runtimeDiagnostics';
 
 const SelectedChannelStore = findByStoreName('SelectedChannelStore');
 const MessageStore = findByStoreName('MessageStore');
@@ -69,10 +70,12 @@ function getNativeEvent(args) {
 function runFileAction(action) {
   if (!action) {
     debugWarn('action.missing');
+    showDiagnosticToast('FCP tap: no file action');
     return false;
   }
 
   debugLog('action.run', describeFileActionForLog(action));
+  showDiagnosticToast(`FCP tap: ${action.action === 'download' ? 'Download' : 'Preview'}`);
 
   if (action.action === 'download') {
     const translations = getMessages(intl.currentLocale);
@@ -87,7 +90,7 @@ function runFileAction(action) {
   return true;
 }
 
-function handleFileAction(args) {
+function resolveInviteFileAction(args) {
   const nativeEvent = getNativeEvent(args);
   const message = getMessage(nativeEvent, args?.[0]);
   const action = resolveFileActionFromEvent({ nativeEvent, message, isPreviewableAttachment });
@@ -98,7 +101,18 @@ function handleFileAction(args) {
     action: describeFileActionForLog(action),
   });
 
+  return action;
+}
+
+function handleInviteFileAction(args, originalFunction) {
+  const action = resolveInviteFileAction(args);
+
+  if (!action) {
+    return originalFunction(...args);
+  }
+
   runFileAction(action);
+  return null;
 }
 
 function handleButtonActionComponent(args, originalFunction) {
@@ -138,8 +152,8 @@ function handleButtonActionComponent(args, originalFunction) {
 }
 
 export default function patch() {
-  const unpatchTap = MessageHandlers.patch('handleTapInviteEmbed', handleFileAction);
-  const unpatchAccept = MessageHandlers.patch('handleTapInviteEmbedAccept', handleFileAction);
+  const unpatchTap = MessageHandlers.patchInstead('handleTapInviteEmbed', handleInviteFileAction);
+  const unpatchAccept = MessageHandlers.patchInstead('handleTapInviteEmbedAccept', handleInviteFileAction);
   const unpatchButton = MessageHandlers.patchInstead('handleTapButtonActionComponent', handleButtonActionComponent);
 
   return () => {

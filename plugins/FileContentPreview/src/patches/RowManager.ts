@@ -4,8 +4,9 @@
 import { findByStoreName, findByName, findByProps } from '@vendetta/metro';
 import { after } from '@vendetta/patcher';
 import filetypes from '../filetypes';
-import { createFileActionButtons, createFileActionData, withFileActionData } from '../utils/fileActions';
+import { GENERATED_FILE_ACTIONS, createFileActionData, withFileActionData } from '../utils/fileActions';
 import { debugLog } from '../utils/debugLogger';
+import { showDiagnosticToastOnce } from '../utils/runtimeDiagnostics';
 
 const ThemeStore = findByStoreName('ThemeStore');
 
@@ -32,7 +33,11 @@ function isPreviewableAttachment(attachment) {
   return filetypes.has(attachment.filename?.toLowerCase().split('.').pop());
 }
 
-function makeRPL(attachment) {
+function getActionLabel(action) {
+  return action === 'download' ? 'Download' : 'Preview';
+}
+
+function makeRPL(attachment, action) {
   const filename = attachment.filename ?? 'unknown';
   const size = attachment.size ?? 0;
 
@@ -45,11 +50,11 @@ function makeRPL(attachment) {
     type: null,
     extendedType: CodedLinkExtendedType.EMBEDDED_ACTIVITY_INVITE,
     participantAvatarUris: [],
-    acceptLabelText: '',
+    acceptLabelText: getActionLabel(action),
     splashUrl: null,
     noParticipantsText: '\n' + filename,
-    ctaEnabled: false,
-  }, createFileActionData({ filename, url: attachment.url, size }, 'preview'));
+    ctaEnabled: true,
+  }, createFileActionData({ filename, url: attachment.url, size }, action));
 }
 
 export default function patch() {
@@ -58,20 +63,16 @@ export default function patch() {
     if (!message) return;
     if (!message.attachments?.length) return;
     let rpls: any[] = [];
-    let componentRows: any[] = [];
     let attachs: any[] = [];
-    let textFileIndex = 0;
     const messageId = message.id ?? message.messageId ?? 'unknown';
     debugLog('row.generate.start', {
       messageId,
       attachments: message.attachments.length,
       codedLinks: message.codedLinks?.length ?? 0,
-      components: message.components?.length ?? 0,
     });
     message.attachments.forEach((attachment) => {
       if (isPreviewableAttachment(attachment)) {
-        rpls.push(makeRPL(attachment));
-        componentRows.push(...createFileActionButtons(attachment, `${messageId}:${textFileIndex++}`));
+        rpls.push(...GENERATED_FILE_ACTIONS.map((action) => makeRPL(attachment, action)));
       } else {
         attachs.push(attachment);
       }
@@ -79,14 +80,13 @@ export default function patch() {
     if (rpls.length) {
       if (!message.codedLinks?.length) message.codedLinks = [];
       message.codedLinks.push(...rpls);
-      message.components = [...(message.components ?? []), ...componentRows];
       message.attachments = attachs;
+      showDiagnosticToastOnce('row.generate.injected', 'FCP file actions injected');
       debugLog('row.generate.injected', {
         messageId,
-        fileRows: rpls.length,
-        componentRows: componentRows.length,
+        actionRows: rpls.length,
         remainingAttachments: attachs.length,
-        componentIds: componentRows.flatMap((row) => row.components?.map((component) => component.id) ?? []),
+        actions: GENERATED_FILE_ACTIONS,
       });
     }
   });
