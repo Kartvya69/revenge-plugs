@@ -5,6 +5,7 @@ import { findByStoreName, findByName, findByProps } from '@vendetta/metro';
 import { after } from '@vendetta/patcher';
 import filetypes from '../filetypes';
 import { createFileActionButtons, createFileActionData, withFileActionData } from '../utils/fileActions';
+import { debugLog } from '../utils/debugLogger';
 
 const ThemeStore = findByStoreName('ThemeStore');
 
@@ -61,6 +62,12 @@ export default function patch() {
     let attachs: any[] = [];
     let textFileIndex = 0;
     const messageId = message.id ?? message.messageId ?? 'unknown';
+    debugLog('row.generate.start', {
+      messageId,
+      attachments: message.attachments.length,
+      codedLinks: message.codedLinks?.length ?? 0,
+      components: message.components?.length ?? 0,
+    });
     message.attachments.forEach((attachment) => {
       if (isPreviewableAttachment(attachment)) {
         rpls.push(makeRPL(attachment));
@@ -74,6 +81,13 @@ export default function patch() {
       message.codedLinks.push(...rpls);
       message.components = [...(message.components ?? []), ...componentRows];
       message.attachments = attachs;
+      debugLog('row.generate.injected', {
+        messageId,
+        fileRows: rpls.length,
+        componentRows: componentRows.length,
+        remainingAttachments: attachs.length,
+        componentIds: componentRows.flatMap((row) => row.components?.map((component) => component.id) ?? []),
+      });
     }
   });
 }

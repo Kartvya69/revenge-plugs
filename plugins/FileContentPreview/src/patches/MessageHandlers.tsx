@@ -5,6 +5,7 @@ import { FCModal } from '../ui/FCModal';
 import { downloadFile } from '../utils/downloadFile';
 import { isFileActionCustomId, resolveFileActionFromEvent } from '../utils/fileActions';
 import getMessages from '../translations';
+import { debugLog, debugWarn, describeFileActionForLog } from '../utils/debugLogger';
 
 const SelectedChannelStore = findByStoreName('SelectedChannelStore');
 const MessageStore = findByStoreName('MessageStore');
@@ -47,6 +48,7 @@ function getMessage(nativeEvent, eventData = null) {
 }
 
 function openPreview({ filename, url, size }) {
+  debugLog('preview.open', { filename, size, hasUrl: Boolean(url) });
   modals.pushModal({
     key: 'file-content-preview',
     modal: {
@@ -65,7 +67,12 @@ function getNativeEvent(args) {
 }
 
 function runFileAction(action) {
-  if (!action) return false;
+  if (!action) {
+    debugWarn('action.missing');
+    return false;
+  }
+
+  debugLog('action.run', describeFileActionForLog(action));
 
   if (action.action === 'download') {
     const translations = getMessages(intl.currentLocale);
@@ -85,6 +92,12 @@ function handleFileAction(args) {
   const message = getMessage(nativeEvent, args?.[0]);
   const action = resolveFileActionFromEvent({ nativeEvent, message, isPreviewableAttachment });
 
+  debugLog('invite.tap', {
+    nativeEvent,
+    hasMessage: Boolean(message),
+    action: describeFileActionForLog(action),
+  });
+
   runFileAction(action);
 }
 
@@ -103,11 +116,19 @@ function handleButtonActionComponent(args, originalFunction) {
         nativeEvent?.component?.customId;
 
   if (!isFileActionCustomId(customId)) {
+    debugLog('button.tap.passthrough', { customId, nativeEvent });
     return originalFunction(...args);
   }
 
   const message = getMessage(nativeEvent, args?.[0]);
   const action = resolveFileActionFromEvent({ nativeEvent, message, isPreviewableAttachment });
+
+  debugLog('button.tap.fileAction', {
+    customId,
+    nativeEvent,
+    hasMessage: Boolean(message),
+    action: describeFileActionForLog(action),
+  });
 
   if (!runFileAction(action)) {
     return originalFunction(...args);
